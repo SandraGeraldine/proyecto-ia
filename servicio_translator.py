@@ -20,51 +20,49 @@ print(f"TRANSLATOR_KEY: {'Configurada' if os.getenv('TRANSLATOR_KEY') else 'No c
 print(f"TRANSLATOR_ENDPOINT: {'Configurado' if os.getenv('TRANSLATOR_ENDPOINT') else 'No configurado'}")
 print(f"TRANSLATOR_REGION: {'Configurada' if os.getenv('TRANSLATOR_REGION') else 'No configurada'}")
 
-def conectar_translator():
-    """
-    Conecta al servicio de Azure Translator.
-    
-    Returns:
-        TextTranslationClient: Cliente de Azure Translator
-    """
+def get_translation_client():
+    """Crea y retorna un cliente de Azure Translator"""
     key = os.getenv('TRANSLATOR_KEY')
     endpoint = os.getenv('TRANSLATOR_ENDPOINT')
-    region = os.getenv('TRANSLATOR_REGION', 'southcentralus')
+    region = os.getenv('TRANSLATOR_REGION', 'eastus')
     
     if not key or not endpoint:
-        raise ValueError("TRANSLATOR_KEY o TRANSLATOR_ENDPOINT no están configuradas en las variables de entorno")
+        raise ValueError("Las credenciales de Azure Translator no están configuradas correctamente.")
     
-    credential = AzureKeyCredential(key)
-    return TextTranslationClient(credential=credential, endpoint=endpoint, region=region)
+    credential = TranslatorCredential(key, region)
+    return TextTranslationClient(endpoint=endpoint, credential=credential)
 
 def traducir_texto(texto, idioma_destino="en"):
     """
-    Traduce un texto al idioma especificado.
+    Traduce un texto al idioma especificado usando Azure Translator.
     
     Args:
         texto (str): Texto a traducir
         idioma_destino (str): Código de idioma de destino (por defecto: "en")
         
     Returns:
-        str: Texto traducido
+        str: Texto traducido o mensaje de error
     """
     try:
+        # Validar entrada
         if not texto or not isinstance(texto, str) or not texto.strip():
             return ""
-            
-        client = conectar_translator()
+
+        # Obtener cliente de traducción
+        client = get_translation_client()
         
-        # Traducir texto (el SDK manejará la detección automática del idioma)
+        # Realizar la traducción
         response = client.translate(
-            body=[{"text": texto}],
+            content=[texto],
             to=[idioma_destino]
         )
         
-        if response and len(response) > 0 and len(response[0].translations) > 0:
+        # Procesar la respuesta
+        if response and len(response) > 0 and hasattr(response[0], 'translations'):
             return response[0].translations[0].text
         else:
-            return "No se pudo traducir el texto"
+            return "No se pudo obtener la traducción. Respuesta inesperada del servicio."
             
     except Exception as e:
         print(f"Error en la traducción: {str(e)}")
-        return f"Error al traducir: {str(e)}"
+        return f"Error al traducir el texto: {str(e)}"
