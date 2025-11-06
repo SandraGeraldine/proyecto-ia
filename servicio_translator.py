@@ -29,8 +29,8 @@ def get_translation_client():
     if not key or not endpoint:
         raise ValueError("Las credenciales de Azure Translator no están configuradas correctamente.")
     
-    credential = TranslatorCredential(key, region)
-    return TextTranslationClient(endpoint=endpoint, credential=credential)
+    credential = AzureKeyCredential(key)
+    return TextTranslationClient(endpoint=endpoint, credential=credential, region=region)
 
 def traducir_texto(texto, idioma_destino="en"):
     """
