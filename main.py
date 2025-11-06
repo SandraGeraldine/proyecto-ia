@@ -164,7 +164,7 @@ def index():
     return render_template('index.html')
 
 # Endpoint para obtener token de Direct Line
-@app.route('/api/directline/token', methods=['GET'])
+@app.route('/api/directline/token', methods=['GET', 'POST'])
 def generate_directline_token():
     try:
         print("\n=== Iniciando generación de token Direct Line ===")
