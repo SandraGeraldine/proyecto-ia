@@ -166,92 +166,150 @@ def index():
 # Endpoint para obtener token de Direct Line
 @app.route('/api/directline/token', methods=['GET', 'POST'])
 def generate_directline_token():
+    """
+    Genera un token de Direct Line para la conexión con el bot.
+    
+    Returns:
+        JSON con el token de conexión o un mensaje de error detallado.
+    """
     try:
         print("\n=== Iniciando generación de token Direct Line ===")
         
-        # Usar la clave secreta de las variables de entorno
+        # 1. Validar la clave secreta
         DIRECT_LINE_SECRET = os.getenv('DIRECT_LINE_SECRET')
-        
         if not DIRECT_LINE_SECRET:
             error_msg = 'No se encontró la clave secreta de Direct Line en las variables de entorno'
             print(f"Error: {error_msg}")
             return jsonify({
                 'success': False,
-                'error': error_msg
+                'error': error_msg,
+                'hint': 'Verifica que la variable DIRECT_LINE_SECRET esté configurada en Azure App Service',
+                'solution': '1. Ve a Azure Portal > App Service > Configuración > Configuración de la aplicación\n' +
+                           '2. Agrega una nueva configuración con nombre DIRECT_LINE_SECRET\n' +
+                           '3. Usa el valor de la clave secreta de tu canal Direct Line'
             }), 500
-            
-        print("Clave secreta encontrada en las variables de entorno")
-        
-        # URL de la API de Direct Line
-        url = 'https://directline.botframework.com/v3/directline/tokens/generate'
-        
-        # Crear un ID de usuario único
-        user_id = f"dl_{os.urandom(16).hex()}"
-        
-        # Encabezados para la solicitud
+
+        # 2. Validar formato de la clave
+        if not DIRECT_LINE_SECRET.startswith('DLSECRET_'):
+            print(f"Advertencia: La clave no tiene el formato esperado. Valor: {DIRECT_LINE_SECRET[:10]}...")
+
+        # 3. Configurar headers con validación
         headers = {
             'Authorization': f'Bearer {DIRECT_LINE_SECRET}',
             'Content-Type': 'application/json'
         }
         
-        # Datos para la solicitud
+        # 4. Configurar datos con origen confiable
         data = {
             'user': {
-                'id': user_id
+                'id': f"user_{os.urandom(8).hex()}"
             },
-            'trustedOrigins': ['*']
+            'trustedOrigins': [
+                'https://sandra-servicio-akenaacucyavbug9.brazilsouth-01.azurewebsites.net',
+                'http://localhost:8000',  # Para pruebas locales
+                'http://localhost:5000'   # Puerto alternativo para pruebas
+            ]
         }
+
+        # 5. Configurar URL y timeout
+        url = 'https://directline.botframework.com/v3/directline/tokens/generate'
         
-        print(f"Solicitando token a Direct Line para el usuario: {user_id}")
-        
-        # Hacer la solicitud para generar un nuevo token
+        # 6. Log de depuración (sin exponer la clave secreta)
+        debug_info = {
+            'url': url,
+            'headers': {k: '***' if k == 'Authorization' else v for k, v in headers.items()},
+            'data': data,
+            'direct_line_secret_length': len(DIRECT_LINE_SECRET),
+            'direct_line_secret_prefix': DIRECT_LINE_SECRET[:10] + '...' if DIRECT_LINE_SECRET else None
+        }
+        print(f"\n=== Debug Info ===\n{json.dumps(debug_info, indent=2)}\n")
+
+        # 7. Hacer la petición con timeout
         response = requests.post(
-            url, 
+            url,
             headers=headers,
             json=data,
-            timeout=10  # 10 segundos de timeout
+            timeout=15  # Aumentado a 15 segundos
         )
         
+        # 8. Manejar respuesta
         print(f"Respuesta de Direct Line - Estado: {response.status_code}")
-        
-        # Verificar si la respuesta fue exitosa
         response.raise_for_status()
         
         result = response.json()
         
         if not result.get('token'):
-            error_msg = 'La respuesta de Direct Line no contiene un token válido'
+            error_msg = 'La respuesta no contiene un token válido'
             print(f"Error: {error_msg}")
             return jsonify({
                 'success': False,
                 'error': error_msg,
-                'response': result
+                'response': result,
+                'hint': 'Verifica que el bot esté publicado y que la clave secreta sea correcta',
+                'solution': '1. Asegúrate de que el bot esté publicado en Azure\n' +
+                           '2. Verifica que la clave secreta sea la correcta\n' +
+                           '3. Revisa los registros del bot en Azure Portal para ver si hay errores'
             }), 500
-        
-        print("Token generado con éxito")
-        
-        return jsonify({
+            
+        # 9. Retornar respuesta exitosa (sin exponer información sensible)
+        response_data = {
             'success': True,
             'token': result.get('token'),
-            'conversationId': result.get('conversationId'),
-            'expires_in': result.get('expires_in'),
-            'streamUrl': result.get('streamUrl')
-        })
+            'expires_in': result.get('expires_in', 3600),
+            'hint': 'Token generado correctamente',
+            'debug': {
+                'token_length': len(result.get('token', '')),
+                'expires_in': result.get('expires_in')
+            }
+        }
         
+        print(f"Token generado con éxito. Longitud: {len(result.get('token', ''))} caracteres")
+        return jsonify(response_data)
+
     except requests.exceptions.RequestException as e:
-        print(f"Error en la solicitud a Direct Line: {str(e)}")
+        # Manejo detallado de errores de red
+        error_info = {
+            'error_type': type(e).__name__,
+            'error_message': str(e),
+            'request_url': getattr(e, 'request', {}).get('url', 'N/A'),
+            'response_status': None,
+            'response_text': None
+        }
+        
         if hasattr(e, 'response') and e.response is not None:
-            print(f"Respuesta del servidor: {e.response.status_code} - {e.response.text}")
+            error_info.update({
+                'response_status': e.response.status_code,
+                'response_text': e.response.text[:500] + '...' if e.response.text else None,
+                'response_headers': dict(e.response.headers)
+            })
+        
+        print(f"\n=== Error de conexión ===\n{json.dumps(error_info, indent=2)}\n")
+        
         return jsonify({
             'success': False,
             'error': f'Error al conectar con Direct Line: {str(e)}',
-            'status_code': e.response.status_code if hasattr(e, 'response') and e.response is not None else None
-        }), 500
+            'details': error_info,
+            'hint': 'Verifica tu conexión a internet y la configuración del bot',
+            'solution': '1. Verifica que el bot esté publicado y en ejecución\n' +
+                       '2. Comprueba que la clave secreta sea correcta\n' +
+                       '3. Revisa la configuración de red y firewall'
+        }), 500 if not hasattr(e, 'response') or e.response is None else e.response.status_code
+
     except Exception as e:
-        print(f"Error inesperado: {str(e)}")
+        # Manejo de errores inesperados
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"\n=== Error inesperado ===\n{error_trace}")
+        
         return jsonify({
             'success': False,
-            'error': f'Error inesperado: {str(e)}'
+            'error': f'Error inesperado: {str(e)}',
+            'error_type': type(e).__name__,
+            'hint': 'Consulta los registros del servidor para más detalles',
+            'solution': '1. Revisa los registros de la aplicación en Azure Portal\n' +
+                       '2. Verifica que todas las dependencias estén instaladas\n' +
+                       '3. Contacta al soporte técnico si el problema persiste',
+            'traceback': error_trace if os.getenv('FLASK_DEBUG') == '1' else None
         }), 500
 
 # Endpoint para el chatbot
