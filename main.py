@@ -1,10 +1,18 @@
-from flask import Flask, request, jsonify, render_template, send_from_directory
+# Módulos estándar
 import os
-import json  # Añadido para manejar operaciones JSON
+import sys
+import json
 from pathlib import Path
+
+# Módulos de terceros
+from flask import Flask, request, jsonify, render_template, send_from_directory
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import requests
+
+print("=== Módulos importados correctamente ===", file=sys.stderr)
+print(f"Python version: {sys.version}", file=sys.stderr)
+print(f"JSON module: {json.__file__ if hasattr(json, '__file__') else 'built-in'}", file=sys.stderr)
 
 # Importar los servicios
 from servicio_language import analizar_sentimiento, conectar_language
@@ -165,14 +173,8 @@ def index():
     return render_template('index.html')
 
 # Endpoint para obtener token de Direct Line
-@app.route('/api/directline/token', methods=['GET', 'POST'])
+@app.route('/api/directline/token', methods=['GET'])
 def generate_directline_token():
-    """
-    Genera un token de Direct Line para la conexión con el bot.
-    
-    Returns:
-        JSON con el token de conexión o un mensaje de error detallado.
-    """
     try:
         print("\n=== Iniciando generación de token Direct Line ===")
         
@@ -200,16 +202,23 @@ def generate_directline_token():
             'Content-Type': 'application/json'
         }
         
-        # 4. Configurar datos con origen confiable
+        # Configurar orígenes confiables
+        trusted_origins = [
+            'https://sandra-servicio-akenaacucyavbug9.brazilsouth-01.azurewebsites.net',
+            'http://localhost:8000',
+            'http://localhost:5000'
+        ]
+        
+        # Filtrar orígenes vacíos o inválidos
+        trusted_origins = [origin for origin in trusted_origins if origin and origin.strip() != '*']
+        
+        # Datos para la solicitud
         data = {
             'user': {
-                'id': f"user_{os.urandom(8).hex()}"
+                'id': f"user_{os.urandom(8).hex()}",
+                'name': 'Usuario Web'  # Nombre opcional
             },
-            'trustedOrigins': [
-                'https://sandra-servicio-akenaacucyavbug9.brazilsouth-01.azurewebsites.net',
-                'http://localhost:8000',  # Para pruebas locales
-                'http://localhost:5000'   # Puerto alternativo para pruebas
-            ]
+            'trustedOrigins': trusted_origins
         }
 
         # 5. Configurar URL y timeout
@@ -227,18 +236,20 @@ def generate_directline_token():
 
         # 7. Hacer la petición con timeout
         response = requests.post(
-            url,
+            'https://directline.botframework.com/v3/directline/tokens/generate',
             headers=headers,
             json=data,
-            timeout=15  # Aumentado a 15 segundos
+            timeout=15
         )
         
         # 8. Manejar respuesta
         print(f"Respuesta de Direct Line - Estado: {response.status_code}")
         response.raise_for_status()
         
+        # Procesar la respuesta
         result = response.json()
         
+        # Verificar si la respuesta contiene un token
         if not result.get('token'):
             error_msg = 'La respuesta no contiene un token válido'
             print(f"Error: {error_msg}")
@@ -249,25 +260,78 @@ def generate_directline_token():
                 'hint': 'Verifica que el bot esté publicado y que la clave secreta sea correcta',
                 'solution': '1. Asegúrate de que el bot esté publicado en Azure\n' +
                            '2. Verifica que la clave secreta sea la correcta\n' +
-                           '3. Revisa los registros del bot en Azure Portal para ver si hay errores'
+                           '3. Revisa los registros del bot en Azure Portal para ver si hay errores',
+                'debug': {
+                    'status_code': response.status_code,
+                    'response_headers': dict(response.headers)
+                }
             }), 500
             
         # 9. Retornar respuesta exitosa (sin exponer información sensible)
+        # Preparar respuesta exitosa
         response_data = {
             'success': True,
             'token': result.get('token'),
             'expires_in': result.get('expires_in', 3600),
+            'conversationId': result.get('conversationId'),
+            'streamUrl': result.get('streamUrl'),
             'hint': 'Token generado correctamente',
             'debug': {
                 'token_length': len(result.get('token', '')),
-                'expires_in': result.get('expires_in')
+                'expires_in': result.get('expires_in'),
+                'has_conversation_id': 'conversationId' in result
             }
         }
         
         print(f"Token generado con éxito. Longitud: {len(result.get('token', ''))} caracteres")
-        return jsonify(response_data)
+        
+        # Configurar CORS para permitir el origen de la aplicación
+        response = jsonify(response_data)
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+        
+        return response
 
     except requests.exceptions.RequestException as e:
+        # Manejo detallado de errores de red
+        error_info = {
+            'error_type': type(e).__name__,
+            'error_message': str(e),
+            'request_url': getattr(e, 'request', {}).get('url', 'N/A'),
+            'response_status': None,
+            'response_text': None
+        }
+        
+        if hasattr(e, 'response') and e.response is not None:
+            try:
+                error_info.update({
+                    'response_status': e.response.status_code,
+                    'response_headers': dict(e.response.headers),
+                    'response_text': e.response.text[:500] + '...' if e.response.text else None
+                })
+            except Exception as resp_err:
+                error_info['response_error'] = f'Error al procesar respuesta: {str(resp_err)}'
+        
+        print(f"\n=== Error de conexión ===\n{json.dumps(error_info, indent=2)}\n")
+        
+        response = jsonify({
+            'success': False,
+            'error': f'Error al conectar con Direct Line: {str(e)}',
+            'details': error_info,
+            'hint': 'Verifica tu conexión a internet y la configuración del bot',
+            'solution': '1. Verifica que el bot esté publicado y en ejecución\n' +
+                       '2. Comprueba que la clave secreta sea correcta\n' +
+                       '3. Revisa la configuración de red y firewall',
+            'debug': {
+                'direct_line_secret_configured': bool(DIRECT_LINE_SECRET),
+                'direct_line_secret_length': len(DIRECT_LINE_SECRET) if DIRECT_LINE_SECRET else 0,
+                'direct_line_secret_prefix': DIRECT_LINE_SECRET[:10] + '...' if DIRECT_LINE_SECRET else None
+            }
+        })
+        
+        response.status_code = 500 if not hasattr(e, 'response') or e.response is None else e.response.status_code
+        return response
         # Manejo detallado de errores de red
         error_info = {
             'error_type': type(e).__name__,
