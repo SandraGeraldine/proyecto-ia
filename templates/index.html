@@ -97,7 +97,12 @@
                                 <i class="fas fa-language text-green-500 text-xl mr-2"></i>
                                 <h4 class="font-medium text-gray-800">Traducción al Inglés</h4>
                             </div>
-                            <div id="translation-result" class="text-gray-700">-</div>
+                            <div id="translation-result" class="text-gray-700 mb-2">-</div>
+                            <button 
+                                onclick="translateText()" 
+                                class="mt-2 text-sm bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded flex items-center">
+                                <i class="fas fa-sync-alt mr-1"></i> Traducir a Inglés
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -238,6 +243,52 @@
             reader.readAsDataURL(file);
         }
 
+        // Función para traducir texto
+        async function translateText() {
+            const textInput = document.getElementById('text-input').value.trim();
+            if (!textInput) {
+                alert('Por favor ingresa un texto para traducir');
+                return;
+            }
+
+            const button = document.querySelector('button[onclick="translateText()"]');
+            const originalText = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Traduciendo...';
+
+            try {
+                const response = await fetch('/api/traducir', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        texto: textInput,
+                        idioma: 'en'  // Traducir a inglés
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Error HTTP! estado: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                if (data.estado === 'éxito') {
+                    document.getElementById('translation-result').textContent = data.traduccion;
+                } else {
+                    throw new Error(data.mensaje || 'Error al traducir el texto');
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Ocurrió un error al traducir: ' + error.message);
+            } finally {
+                button.disabled = false;
+                button.innerHTML = '<i class="fas fa-sync-alt mr-1"></i> Traducir a Inglés';
+            }
+        }
+
         // Función para analizar texto
         async function analyzeText() {
             const textInput = document.getElementById('text-input').value.trim();
@@ -261,14 +312,13 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    throw new Error(`Error HTTP! estado: ${response.status}`);
                 }
 
                 const data = await response.json();
                 
                 // Mostrar resultados
                 document.getElementById('sentiment-result').textContent = data.estado || 'No disponible';
-                document.getElementById('translation-result').textContent = JSON.stringify(data.resultado) || 'No disponible';
                 document.getElementById('text-results').classList.remove('hidden');
                 
             } catch (error) {
