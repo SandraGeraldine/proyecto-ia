@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proyecto IA - Azure Cognitive Services</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+        }
+        .card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="gradient-bg text-white shadow-lg">
+        <div class="container mx-auto px-4 py-8">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-4 md:mb-0">
+                    <h1 class="text-3xl md:text-4xl font-bold">Azure AI Services</h1>
+                    <p class="text-blue-100 mt-2">Análisis de texto e imágenes con IA</p>
+                </div>
+                <div class="flex space-x-4
+                ">
+                    <a href="#texto" class="px-4 py-2 bg-white text-blue-600 rounded-lg font-medium hover:bg-blue-50 transition">
+                        <i class="fas fa-font mr-2"></i>Análisis de Texto
+                    </a>
+                    <a href="#imagen" class="px-4 py-2 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition">
+                        <i class="fas fa-image mr-2"></i>Análisis de Imagen
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-8">
+        <!-- Sección de Análisis de Texto -->
+        <section id="texto" class="mb-16">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+                <i class="fas fa-comment-alt text-blue-500 mr-3"></i>
+                Análisis de Texto
+            </h2>
+            <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="p-6">
+                    <div class="mb-6">
+                        <label for="text-input" class="block text-sm font-medium text-gray-700 mb-2">
+                            Ingresa el texto a analizar:
+                        </label>
+                        <textarea 
+                            id="text-input" 
+                            rows="4" 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                            placeholder="Escribe o pega tu texto aquí..."></textarea>
+                    </div>
+                    <div class="flex justify-end">
+                        <button 
+                            onclick="analyzeText()" 
+                            class="btn-primary text-white px-6 py-2 rounded-lg font-medium flex items-center">
+                            <i class="fas fa-magic mr-2"></i>Analizar Texto
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Resultados del Análisis -->
+                <div id="text-results" class="border-t border-gray-200 p-6 hidden">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Resultados del Análisis</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Sentimiento -->
+                        <div class="bg-blue-50 p-4 rounded-lg">
+                            <div class="flex items-center mb-2">
+                                <i class="fas fa-smile text-blue-500 text-xl mr-2"></i>
+                                <h4 class="font-medium text-gray-800">Sentimiento</h4>
+                            </div>
+                            <div id="sentiment-result" class="text-gray-700">-</div>
+                        </div>
+                        
+                        <!-- Traducción -->
+                        <div class="bg-green-50 p-4 rounded-lg">
+                            <div class="flex items-center mb-2">
+                                <i class="fas fa-language text-green-500 text-xl mr-2"></i>
+                                <h4 class="font-medium text-gray-800">Traducción al Inglés</h4>
+                            </div>
+                            <div id="translation-result" class="text-gray-700">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sección de Análisis de Imagen -->
+        <section id="imagen" class="mb-16">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+                <i class="fas fa-camera text-purple-500 mr-3"></i>
+                Análisis de Imagen
+            </h2>
+            <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="p-6">
+                    <div class="mb-6">
+                        <div class="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-400 transition" 
+                             id="drop-zone"
+                             ondrop="handleDrop(event)"
+                             ondragover="handleDragOver(event)"
+                             ondragleave="handleDragLeave(event)">
+                            <input type="file" id="image-input" class="hidden" accept="image/*" onchange="handleFileSelect(event)">
+                            <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-4"></i>
+                            <p class="text-gray-600 mb-2">Arrastra y suelta una imagen aquí o</p>
+                            <button type="button" 
+                                    onclick="document.getElementById('image-input').click()"
+                                    class="text-blue-600 hover:text-blue-800 font-medium">
+                                Selecciona un archivo
+                            </button>
+                            <p class="text-sm text-gray-500 mt-2">Formatos soportados: JPG, PNG, GIF</p>
+                        </div>
+                        <div id="image-preview" class="mt-4 hidden">
+                            <p class="text-sm font-medium text-gray-700 mb-2">Vista previa:</p>
+                            <img id="preview" class="max-h-48 rounded-lg border border-gray-200" />
+                        </div>
+                    </div>
+                    <div class="flex justify-end">
+                        <button 
+                            onclick="analyzeImage()" 
+                            id="analyze-image-btn"
+                            disabled
+                            class="bg-purple-500 text-white px-6 py-2 rounded-lg font-medium flex items-center opacity-50 cursor-not-allowed"
+                            >
+                            <i class="fas fa-search mr-2"></i>Analizar Imagen
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Resultados del Análisis de Imagen -->
+                <div id="image-results" class="border-t border-gray-200 p-6 hidden">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Descripción de la Imagen</h3>
+                    <div class="bg-purple-50 p-4 rounded-lg">
+                        <div class="flex items-center mb-2">
+                            <i class="fas fa-image text-purple-500 text-xl mr-2"></i>
+                            <h4 class="font-medium text-gray-800">Análisis de IA</h4>
+                        </div>
+                        <div id="image-description" class="text-gray-700">-</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-8 mt-12">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-4 md:mb-0">
+                    <h3 class="text-xl font-bold">Proyecto IA - Azure Cognitive Services</h3>
+                    <p class="text-gray-400">Aplicación de demostración con Flask y Azure AI</p>
+                </div>
+                <div class="flex space-x-4">
+                    <a href="#" class="text-gray-300 hover:text-white transition">
+                        <i class="fab fa-github text-2xl"></i>
+                    </a>
+                    <a href="#" class="text-gray-300 hover:text-white transition">
+                        <i class="fab fa-microsoft text-2xl"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="border-t border-gray-700 mt-6 pt-6 text-center text-gray-400 text-sm">
+                <p>© 2023 Proyecto IA. Todos los derechos reservados.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Variables globales
+        let selectedFile = null;
+
+        // Funciones para el manejo de archivos
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file && file.type.match('image.*')) {
+                processFile(file);
+            }
+        }
+
+        function handleDrop(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            const dropZone = document.getElementById('drop-zone');
+            dropZone.classList.remove('border-blue-400', 'bg-blue-50');
+            
+            const file = event.dataTransfer.files[0];
+            if (file && file.type.match('image.*')) {
+                processFile(file);
+            }
+        }
+
+        function handleDragOver(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const dropZone = document.getElementById('drop-zone');
+            dropZone.classList.add('border-blue-400', 'bg-blue-50');
+        }
+
+        function handleDragLeave(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const dropZone = document.getElementById('drop-zone');
+            dropZone.classList.remove('border-blue-400', 'bg-blue-50');
+        }
+
+        function processFile(file) {
+            selectedFile = file;
+            const preview = document.getElementById('preview');
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                preview.src = e.target.result;
+                document.getElementById('image-preview').classList.remove('hidden');
+                document.getElementById('analyze-image-btn').disabled = false;
+                document.getElementById('analyze-image-btn').classList.remove('opacity-50', 'cursor-not-allowed');
+                document.getElementById('analyze-image-btn').classList.add('hover:bg-purple-600', 'cursor-pointer');
+            };
+            
+            reader.readAsDataURL(file);
+        }
+
+        // Función para analizar texto
+        async function analyzeText() {
+            const textInput = document.getElementById('text-input').value.trim();
+            if (!textInput) {
+                alert('Por favor ingresa un texto para analizar');
+                return;
+            }
+
+            const button = document.querySelector('button[onclick="analyzeText()"]');
+            const originalText = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Analizando...';
+
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/analizar-sentimiento', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ texto: textInput })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Mostrar resultados
+                document.getElementById('sentiment-result').textContent = data.estado || 'No disponible';
+                document.getElementById('translation-result').textContent = JSON.stringify(data.resultado) || 'No disponible';
+                document.getElementById('text-results').classList.remove('hidden');
+                
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Ocurrió un error al procesar la solicitud: ' + error.message);
+            } finally {
+                button.disabled = false;
+                button.innerHTML = originalText;
+            }
+        }
+
+        // Función para analizar imagen
+        async function analyzeImage() {
+            if (!selectedFile) {
+                alert('Por favor selecciona una imagen para analizar');
+                return;
+            }
+
+            const button = document.getElementById('analyze-image-btn');
+            const originalText = button.innerHTML;
+            const resultsDiv = document.getElementById('image-results');
+            const descriptionDiv = document.getElementById('image-description');
+            
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Analizando...';
+            
+            // Limpiar resultados anteriores
+            resultsDiv.classList.add('hidden');
+            descriptionDiv.textContent = '';
+
+            const formData = new FormData();
+            formData.append('imagen', selectedFile);
+
+            try {
+                console.log('Enviando imagen para análisis...');
+                const response = await fetch('http://127.0.0.1:5000/api/analizar-imagen', {
+                    method: 'POST',
+                    body: formData
+                    // No establecer Content-Type manualmente para permitir que el navegador establezca el boundary
+                });
+
+                const data = await response.json();
+                console.log('Respuesta del servidor:', data);
+                
+                if (data.estado === 'éxito') {
+                    // Mostrar resultados
+                    descriptionDiv.textContent = data.descripcion || 'No se pudo generar una descripción';
+                    resultsDiv.classList.remove('hidden');
+                    
+                    // Mostrar vista previa de la imagen
+                    const preview = document.getElementById('image-preview');
+                    preview.src = URL.createObjectURL(selectedFile);
+                    preview.style.display = 'block';
+                    
+                    // Desplazarse suavemente a los resultados
+                    resultsDiv.scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    throw new Error(data.mensaje || 'Error desconocido al procesar la imagen');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Ocurrió un error al procesar la imagen');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = originalText;
+            }
+        }
+
+        // Inicialización
+        document.addEventListener('DOMContentLoaded', function() {
+            // Agregar eventos de arrastrar y soltar
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                document.getElementById('drop-zone').addEventListener(eventName, preventDefaults, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        });
+    </script>
+</body>
+</html>
