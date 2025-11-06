@@ -58,5 +58,3 @@ Este proyecto utiliza tres servicios de Azure Cognitive Services:
 - El archivo `.env` debe contener tus claves de API de Azure
 
 ---
-
-Hecho con ❤️ por [Tu Nombre]
