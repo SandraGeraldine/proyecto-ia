@@ -24,13 +24,12 @@ def get_translation_client():
     """Crea y retorna un cliente de Azure Translator"""
     key = os.getenv('TRANSLATOR_KEY')
     endpoint = os.getenv('TRANSLATOR_ENDPOINT')
-    region = os.getenv('TRANSLATOR_REGION', 'eastus')
     
     if not key or not endpoint:
         raise ValueError("Las credenciales de Azure Translator no están configuradas correctamente.")
     
     credential = AzureKeyCredential(key)
-    return TextTranslationClient(endpoint=endpoint, credential=credential, region=region)
+    return TextTranslationClient(endpoint=endpoint, credential=credential)
 
 def traducir_texto(texto, idioma_destino="en"):
     """
