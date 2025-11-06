@@ -252,7 +252,7 @@
             button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Analizando...';
 
             try {
-                const response = await fetch('http://127.0.0.1:5000/api/analizar-sentimiento', {
+                const response = await fetch('/api/analizar-sentimiento', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -304,7 +304,7 @@
 
             try {
                 console.log('Enviando imagen para análisis...');
-                const response = await fetch('http://127.0.0.1:5000/api/analizar-imagen', {
+                const response = await fetch('/api/analizar-imagen', {
                     method: 'POST',
                     body: formData
                     // No establecer Content-Type manualmente para permitir que el navegador establezca el boundary
