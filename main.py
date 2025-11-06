@@ -1,11 +1,12 @@
 from flask import Flask, request, jsonify, render_template, send_from_directory
 import os
+import json  # Añadido para manejar operaciones JSON
 from pathlib import Path
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
+import requests
 
 # Importar los servicios
-import requests
 from servicio_language import analizar_sentimiento, conectar_language
 from servicio_translator import traducir_texto
 from servicio_vision import describir_imagen
