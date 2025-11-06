@@ -1,84 +1,104 @@
-from botbuilder.core import BotFrameworkAdapter, TurnContext
-from botbuilder.schema import Activity
-from azure.cognitiveservices.language.luis.runtime import LUISRuntimeClient
-from msrest.authentication import CognitiveServicesCredentials
+from typing import Dict, Any, Optional
 import os
 from dotenv import load_dotenv
-from typing import Dict, Any, Optional
+from azure.ai.textanalytics import TextAnalyticsClient
+from azure.core.credentials import AzureKeyCredential
 
 load_dotenv()
 
 class InnovVentasBot:
     """
-    Chatbot para E-commerce InnovVentas
-    Integra Text Analytics, Translator y lógica de negocio
+    Chatbot simplificado para E-commerce InnovVentas
+    Utiliza Azure Language Service para análisis de sentimientos
     """
     
     def __init__(self):
-        self.luis_app_id = os.getenv('LUIS_APP_ID')
-        self.luis_key = os.getenv('LUIS_KEY')
-        self.luis_endpoint = os.getenv('LUIS_ENDPOINT')
+        self.language_key = os.getenv('LANGUAGE_KEY')
+        self.language_endpoint = os.getenv('LANGUAGE_ENDPOINT')
         
-    async def on_message_activity(self, turn_context: TurnContext) -> Dict[str, Any]:
+    def analyze_sentiment(self, text: str) -> Dict[str, Any]:
         """
-        Procesa mensajes del usuario y devuelve una respuesta
+        Analiza el sentimiento del texto usando Azure Language Service
         """
-        user_message = turn_context.activity.text
+        try:
+            credential = AzureKeyCredential(self.language_key)
+            client = TextAnalyticsClient(
+                endpoint=self.language_endpoint, 
+                credential=credential
+            )
+            
+            response = client.analyze_sentiment(
+                documents=[text],
+                language="es"
+            )
+            
+            if response and not response[0].is_error:
+                doc = response[0]
+                return {
+                    'sentiment': doc.sentiment,
+                    'confidence_scores': {
+                        'positive': doc.confidence_scores.positive,
+                        'neutral': doc.confidence_scores.neutral,
+                        'negative': doc.confidence_scores.negative
+                    }
+                }
+            
+            return {'error': 'No se pudo analizar el sentimiento'}
+            
+        except Exception as e:
+            return {'error': str(e)}
+    
+    def detect_intent(self, text: str) -> str:
+        """
+        Detección simple de intención basada en palabras clave
+        """
+        text_lower = text.lower()
         
-        # 1. Analizar sentimiento del mensaje
-        from servicio_language import analizar_sentimiento
-        sentiment = analizar_sentimiento(user_message)
+        if any(word in text_lower for word in ['especificaciones', 'características', 'precio', 'producto']):
+            return 'producto'
+        elif any(word in text_lower for word in ['disponible', 'hay', 'stock', 'inventario']):
+            return 'stock'
+        elif any(word in text_lower for word in ['pagar', 'tarjeta', 'cuotas', 'transferencia']):
+            return 'pago'
+        elif any(word in text_lower for word in ['comprar', 'carrito', 'pedido', 'orden']):
+            return 'compra'
+        elif any(word in text_lower for word in ['ayuda', 'problema', 'error', 'soporte']):
+            return 'soporte'
+            
+        return 'general'
+    
+    def generate_response(self, message: str) -> Dict[str, Any]:
+        """
+        Procesa el mensaje y genera una respuesta
+        """
+        # Analizar sentimiento
+        sentiment = self.analyze_sentiment(message)
         
-        # 2. Detectar intención
-        intent = await self.detect_intent(user_message)
+        # Detectar intención
+        intent = self.detect_intent(message)
         
-        # 3. Generar respuesta
-        response = await self.generate_response(intent, user_message, sentiment)
+        # Generar respuesta según intención
+        responses = {
+            'producto': "Te puedo ayudar con información sobre nuestros productos. ¿Qué te gustaría saber?",
+            'stock': "Puedo verificar la disponibilidad. ¿Qué producto te interesa?",
+            'pago': "Aceptamos tarjeta, transferencia y efectivo. ¿Cómo prefieres pagar?",
+            'compra': "¡Excelente elección! ¿Qué producto quieres agregar a tu carrito?",
+            'soporte': "Lamento los inconvenientes. ¿En qué puedo ayudarte hoy?",
+            'general': "¿En qué puedo ayudarte hoy? Estoy aquí para asistirte."
+        }
+        
+        response = responses.get(intent, responses['general'])
+        
+        # Ajustar según sentimiento
+        if 'error' not in sentiment and sentiment.get('sentiment') == 'negative':
+            response = "Lamento que estés teniendo dificultades. " + response
         
         return {
-            'success': True,
+            'success': 'error' not in sentiment,
             'response': response,
             'intent': intent,
             'sentiment': sentiment
         }
-        
-    async def detect_intent(self, text: str) -> str:
-        """
-        Detecta la intención del usuario
-        """
-        intents = {
-            'producto': ['especificaciones', 'características', 'precio', 'producto'],
-            'stock': ['disponible', 'hay', 'stock', 'inventario', 'quedan'],
-            'pago': ['pagar', 'tarjeta', 'cuotas', 'transferencia', 'pago'],
-            'compra': ['comprar', 'carrito', 'pedido', 'orden'],
-            'soporte': ['ayuda', 'problema', 'error', 'soporte']
-        }
-        
-        text_lower = text.lower()
-        for intent, keywords in intents.items():
-            if any(keyword in text_lower for keyword in keywords):
-                return intent
-        
-        return 'general'
-    
-    async def generate_response(self, intent: str, message: str, sentiment: Dict[str, Any]) -> str:
-        """
-        Genera respuesta personalizada según intención
-        """
-        responses = {
-            'producto': "Te puedo ayudar con información sobre nuestros productos. ¿Qué te gustaría saber? Puedo darte especificaciones técnicas, precios o hacer comparaciones.",
-            'stock': "Déjame verificar la disponibilidad en tiempo real. ¿Qué producto te interesa?",
-            'pago': "Aceptamos múltiples métodos de pago: tarjeta de crédito/débito, transferencia bancaria y efectivo. ¿Cuál prefieres?",
-            'compra': "¡Excelente elección! Por favor, indícame qué producto deseas agregar a tu carrito.",
-            'soporte': "Lamento los inconvenientes. Por favor, describe el problema que estás experimentando y con gusto te ayudaré.",
-            'general': "¿En qué más puedo ayudarte hoy? Estoy aquí para asistirte con información de productos, compras y soporte técnico."
-        }
-        
-        # Ajustar respuesta según el sentimiento
-        if sentiment['sentiment'] == 'negative':
-            return "Lamento que estés teniendo dificultades. " + responses[intent] if intent in responses else responses['general']
-        
-        return responses.get(intent, responses['general'])
 
 # Instancia global del bot
 bot = InnovVentasBot()

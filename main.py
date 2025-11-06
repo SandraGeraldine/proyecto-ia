@@ -5,9 +5,11 @@ from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 
 # Importar los servicios
+import requests
 from servicio_language import analizar_sentimiento, conectar_language
 from servicio_translator import traducir_texto
 from servicio_vision import describir_imagen
+from servicio_bot import bot as chat_bot
 
 # Obtener la ruta absoluta del directorio actual
 current_dir = Path(__file__).parent.absolute()
@@ -160,6 +162,120 @@ def analizar_imagen():
 @app.route('/')
 def index():
     return render_template('index.html')
+
+# Endpoint para obtener token de Direct Line
+@app.route('/api/directline/token', methods=['GET'])
+def generate_directline_token():
+    try:
+        print("\n=== Iniciando generación de token Direct Line ===")
+        
+        # Usar la clave secreta de las variables de entorno
+        DIRECT_LINE_SECRET = os.getenv('DIRECT_LINE_SECRET')
+        
+        if not DIRECT_LINE_SECRET:
+            error_msg = 'No se encontró la clave secreta de Direct Line en las variables de entorno'
+            print(f"Error: {error_msg}")
+            return jsonify({
+                'success': False,
+                'error': error_msg
+            }), 500
+            
+        print("Clave secreta encontrada en las variables de entorno")
+        
+        # URL de la API de Direct Line
+        url = 'https://directline.botframework.com/v3/directline/tokens/generate'
+        
+        # Crear un ID de usuario único
+        user_id = f"dl_{os.urandom(16).hex()}"
+        
+        # Encabezados para la solicitud
+        headers = {
+            'Authorization': f'Bearer {DIRECT_LINE_SECRET}',
+            'Content-Type': 'application/json'
+        }
+        
+        # Datos para la solicitud
+        data = {
+            'user': {
+                'id': user_id
+            },
+            'trustedOrigins': ['*']
+        }
+        
+        print(f"Solicitando token a Direct Line para el usuario: {user_id}")
+        
+        # Hacer la solicitud para generar un nuevo token
+        response = requests.post(
+            url, 
+            headers=headers,
+            json=data,
+            timeout=10  # 10 segundos de timeout
+        )
+        
+        print(f"Respuesta de Direct Line - Estado: {response.status_code}")
+        
+        # Verificar si la respuesta fue exitosa
+        response.raise_for_status()
+        
+        result = response.json()
+        
+        if not result.get('token'):
+            error_msg = 'La respuesta de Direct Line no contiene un token válido'
+            print(f"Error: {error_msg}")
+            return jsonify({
+                'success': False,
+                'error': error_msg,
+                'response': result
+            }), 500
+        
+        print("Token generado con éxito")
+        
+        return jsonify({
+            'success': True,
+            'token': result.get('token'),
+            'conversationId': result.get('conversationId'),
+            'expires_in': result.get('expires_in'),
+            'streamUrl': result.get('streamUrl')
+        })
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Error en la solicitud a Direct Line: {str(e)}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"Respuesta del servidor: {e.response.status_code} - {e.response.text}")
+        return jsonify({
+            'success': False,
+            'error': f'Error al conectar con Direct Line: {str(e)}',
+            'status_code': e.response.status_code if hasattr(e, 'response') and e.response is not None else None
+        }), 500
+    except Exception as e:
+        print(f"Error inesperado: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Error inesperado: {str(e)}'
+        }), 500
+
+# Endpoint para el chatbot
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    try:
+        data = request.get_json()
+        message = data.get('message', '').strip()
+        
+        if not message:
+            return jsonify({
+                'success': False,
+                'error': 'El mensaje no puede estar vacío'
+            }), 400
+            
+        # Obtener respuesta del bot
+        response = chat_bot.generate_response(message)
+        return jsonify(response)
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error al procesar el mensaje: {str(e)}'
+        }), 500
 
 # Ruta para servir archivos estáticos
 @app.route('/static/<path:path>')
